@@ -1,22 +1,38 @@
 import {
-  AdminChanged as AdminChangedEvent,
-  Upgraded as UpgradedEvent
+  TokenIPFSPathUpdated as TokenIPFSPathUpdatedEvent,
+  Transfer as TransferEvent,
+  Token as TokenContract,
+  NFTMetadataUpdated as NFTMetadataUpdatedContract
 } from "../generated/Token/Token"
-import { AdminChanged, Upgraded } from "../generated/schema"
 
-export function handleAdminChanged(event: AdminChangedEvent): void {
-  let entity = new AdminChanged(
-    event.transaction.hash.toHex() + "-" + event.logIndex.toString()
-  )
-  entity.previousAdmin = event.params.previousAdmin
-  entity.newAdmin = event.params.newAdmin
-  entity.save()
+import {
+  Token, User
+} from '../generated/schema'
+
+export function handleTokenURIUpdated(event: TokenIPFSPathUpdatedEvent): void {
+  let token = Token.load(event.params.tokenId.toString());
+  token.tokenIPFSPath = event.params.tokenIPFSPath;
+  token.save();
 }
 
-export function handleUpgraded(event: UpgradedEvent): void {
-  let entity = new Upgraded(
-    event.transaction.hash.toHex() + "-" + event.logIndex.toString()
-  )
-  entity.implementation = event.params.implementation
-  entity.save()
+export function handleTransfer(event: TransferEvent): void {
+  let token = Token.load(event.params.tokenId.toString());
+  if (!token) {
+    token = new Token(event.params.tokenId.toString());
+    token.creator = event.params.to.toHexString();
+    token.tokenID = event.params.tokenId;
+
+    let tokenContract = TokenContract.bind(event.address);
+    token.contentURI = tokenContract.tokenURI(event.params.tokenId);
+    token.tokenIPFSPath = tokenContract.getTokenIPFSPath(event.params.tokenId);
+    token.name = tokenContract.name();
+  }
+  token.owner = event.params.to.toHexString();
+  token.save();
+
+  let user = User.load(event.params.to.toHexString());
+  if (!user) {
+    user = new User(event.params.to.toHexString());
+    user.save();
+  }
 }
